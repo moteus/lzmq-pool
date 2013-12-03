@@ -70,3 +70,7 @@ t1:join() t2:join()
 pipe:send("finish") thread:join()
 
 ```
+
+
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/moteus/lzmq-pool/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+
