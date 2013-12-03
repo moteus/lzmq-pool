@@ -1,4 +1,4 @@
-This library provade ability to use same sockets from different
+This library provide ability to use same sockets from different
 Lua states / threads in same process.
 
 ###Usage
@@ -32,7 +32,7 @@ local thread, pipe = zthreads.fork(zmq.context(), [[
   -- we create one socket
   pool:init(ctx, 1, {zmq.REQ, connect = "tcp://127.0.0.1:5556"})
 
-  -- tall we ready
+  -- tell we are ready
   pipe:send("ready")
 
   -- keep hold lzmq.pool library
