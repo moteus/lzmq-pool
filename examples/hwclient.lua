@@ -10,10 +10,12 @@ local thread, pipe = zthreads.fork(zmq.context(), [[
   local zpool    = require "lzmq.pool"
   local zthreads = require "lzmq.threads"
 
+  -- if `parent` lua state may die and destroy this context
+  -- we should use our own context (zmq.context())
   local ctx = zthreads.get_parent_ctx()
 
   -- init library with one pool
-  -- You could guarantee thread safe for this library.
+  -- You should guarantee thread safe for this library.
   -- You could call this function from any thread.
   -- Second call of this function just return true 
   -- but does not change numbers of pools.
