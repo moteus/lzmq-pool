@@ -147,7 +147,7 @@ int qvoid_put(qvoid_t *q, void *data){
   if(ret != 0) return ret;
   while(qvoid_full(q)){
     ret = pthread_cond_wait(&q->cond, &q->mutex);
-    if(ret != ret) return ret;
+    if(ret != 0) return ret;
   }
 
   q->arr[q->count++] = data;
@@ -163,7 +163,7 @@ int qvoid_get(qvoid_t *q, void **data){
   if(ret != 0) return ret;
   while(qvoid_empty(q)){
     ret = pthread_cond_wait(&q->cond, &q->mutex);
-    if(ret != ret) return ret;
+    if(ret != 0) return ret;
   }
 
   assert(q->count > 0);
@@ -187,6 +187,7 @@ static int pool_init(lua_State *L){
   if(!s_queue){
     int i;
     s_queue = (qvoid_t*)malloc(n * sizeof(qvoid_t));
+    if(!s_queue) return -1;
     for(i = 0; i < n; ++i){
       if(0 != qvoid_init(&s_queue[i])){
         while(--i >= 0){
@@ -203,7 +204,7 @@ static int pool_init(lua_State *L){
   return 1;
 }
 
-qvoid_t* pool_at(lua_State *L, int idx){
+static qvoid_t* pool_at(lua_State *L, int idx){
   int i = luaL_checkint(L, idx);
   luaL_argcheck(L, (i >= 0)&&((size_t)i < s_queue_size), idx, "index out of range");
   return &s_queue[i];
