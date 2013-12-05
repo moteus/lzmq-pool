@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/moteus/lzmq-pool.png?branch=master)](https://travis-ci.org/moteus/lzmq-pool)
+
 This library provide ability to use same sockets from different
 Lua states / threads in same process.
 
