@@ -14,7 +14,7 @@ description = {
 
 dependencies = {
   "lua >= 5.1, < 5.3",
-  "lzmq > 3.1",
+  -- "lzmq > 3.1" or "lzmq-ffi > 3.1",
 }
 
 build = {

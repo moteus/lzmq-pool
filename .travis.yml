@@ -40,14 +40,18 @@ before_install:
 
 install:
   - sudo apt-get install libzmq3
-  - sudo apt-get install libzmq3-dev
-  - sudo luarocks install https://raw.github.com/moteus/lzmq/master/rockspecs/lzmq-scm-0.rockspec
+  - if [ $LUA = "luajit" ]; then
+      sudo luarocks install https://raw.github.com/moteus/lzmq/master/rockspecs/lzmq-ffi-scm-0.rockspec;
+    else
+      sudo apt-get install libzmq3-dev;
+      sudo luarocks install https://raw.github.com/moteus/lzmq/master/rockspecs/lzmq-scm-0.rockspec;
+    fi
   - sudo luarocks install lunitx
   - sudo luarocks make rockspecs/lzmq-pool-scm-0.rockspec
 
 script:
   - cd test
-  - lunit.sh -i lua$LUA_SFX test.lua
+  - lunit.sh -i lua$LUA_SFX test_pool.lua
 
 notifications:
   email:
