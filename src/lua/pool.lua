@@ -21,7 +21,7 @@ function socket_pool:init(ctx, n, opt)
 
   for i = 1, math.min(n, zpool.capacity(id)) do
     local s = zmq.assert(ctx:socket(opt))
-    assert(0 == zpool.put(id, s:handle()))
+    assert(0 == zpool.put(id, s:lightuserdata()))
     table.insert(sockets, s)
   end
 
@@ -38,7 +38,7 @@ function socket_pool:aquire(cb)
   if cb then
     local ok, err = pcall(cb, s)
 
-    assert(0 == zpool.put(id, s:handle()))
+    assert(0 == zpool.put(id, s:lightuserdata()))
     if ok then return err end
 
     return assert(ok, err)

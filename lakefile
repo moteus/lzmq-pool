@@ -21,7 +21,9 @@ target('build', core)
 install = target('install', {
   file.group{odir=J(LIBDIR, PROJECT, 'pool'); src = core                                 };
   file.group{odir=J(LUADIR, PROJECT);         src = J('src', 'lua', '*'); recurse = true };
+  file.group{odir=TESTDIR;                    src = J('test', '*');       recurse = true };
 })
 
 target('test', install, function()
+  run_test('test_pool.lua')
 end)

@@ -210,14 +210,50 @@ static qvoid_t* pool_at(lua_State *L, int idx){
   return &s_queue[i];
 }
 
-static int pool_put(lua_State *L){
+static void* pool_ffi_to_lightud(lua_State *L, int idx){
+  void **data;
+  luaL_argcheck(L, lua_type(L, idx) > LUA_TTHREAD, idx, "ffi type expected");
+  data = (void**)lua_topointer(L, idx);
+  lua_pushlightuserdata(L, *data);
+  lua_replace(L, idx);
+  return *data;
+}
+
+static void* pool_str_to_lightud(lua_State *L, int idx){
+  size_t len; void **data = (void **)luaL_checklstring(L, idx, &len);
+  luaL_argcheck(L, len == sizeof(void*), idx, "invalid string length");
+
+  lua_pushlightuserdata(L, *data);
+  lua_replace(L, idx);
+  return *data;
+}
+
+static int pool_put_impl(lua_State *L){
   qvoid_t *q = pool_at(L, 1);
   void *data = lua_touserdata(L, 2);
-
-  luaL_argcheck(L, data && lua_islightuserdata(L, 2), 2, "lightuserdata expected");
-
   lua_pushnumber(L, qvoid_put(q, data));
   return 1;
+}
+
+static int pool_put(lua_State *L){
+  int t = lua_type(L, 2);
+
+  if(LUA_TLIGHTUSERDATA == t){
+    return pool_put_impl(L);
+  }
+
+  if(LUA_TSTRING == t){
+    pool_str_to_lightud(L, 2);
+    return pool_put_impl(L);
+  }
+
+  if(LUA_TTHREAD < t){
+    pool_ffi_to_lightud(L, 2);
+    return pool_put_impl(L);
+  }
+
+  luaL_argcheck(L, 0, 2, "lightuserdata/ffi cdata/string expected");
+  return 0;
 }
 
 static int pool_get(lua_State *L){
@@ -257,12 +293,12 @@ static int pool_close(lua_State *L){
 }
 
 static const struct luaL_Reg l_pool_lib[] = {
-  { "init",      pool_init        },
-  { "put",       pool_put         },
-  { "get",       pool_get         },
-  { "capacity",  pool_capacity    },
-  { "size",      pool_size        },
-  { "close",     pool_close       },
+  { "init",          pool_init          },
+  { "put",           pool_put           },
+  { "get",           pool_get           },
+  { "capacity",      pool_capacity      },
+  { "size",          pool_size          },
+  { "close",         pool_close         },
   {NULL, NULL}
 };
 
