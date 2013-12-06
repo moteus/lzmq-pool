@@ -139,7 +139,7 @@ int qvoid_empty(qvoid_t *q){
 }
 
 int qvoid_full(qvoid_t *q){
-  return qvoid_size(q) == qvoid_capacity(0);
+  return qvoid_size(q) == qvoid_capacity(q);
 }
 
 int qvoid_put(qvoid_t *q, void *data){
@@ -151,7 +151,7 @@ int qvoid_put(qvoid_t *q, void *data){
   }
 
   q->arr[q->count++] = data;
-  assert(q->count <= QVOID_LENGTH);
+  assert(q->count <= qvoid_capacity(q));
 
   pthread_cond_broadcast(&q->cond);
   pthread_mutex_unlock(&q->mutex);

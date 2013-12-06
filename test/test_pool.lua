@@ -17,7 +17,7 @@ print("")
 
 local _ENV = TEST_CASE'interface'            if true  then
 
-function setup()    zpool.init(1) end
+function setup() end
 
 function teardown() zpool.close() end
 
@@ -29,6 +29,8 @@ function test_interface()
 end
 
 function test_init_close()
+  assert_error(function() zpool.size(0) end)
+
   assert_equal(0, zpool.init(1))
   assert_pass (function() zpool.size(0) end)
   assert_error(function() zpool.size(1) end)
@@ -42,6 +44,8 @@ function test_init_close()
   assert_pass (function() zpool.size(1) end)
   assert_error(function() zpool.size(2) end)
   assert_equal(0, zpool.close())
+
+  assert_error(function() zpool.size(0) end)
 end
 
 end
