@@ -15,7 +15,7 @@ print("Lua version: " .. (_G.jit and _G.jit.version or _G._VERSION))
 print("------------------------------------")
 print("")
 
-local _ENV = TEST_CASE'interface'            if true  then
+local _ENV = TEST_CASE'core queue'           if true  then
 
 function setup() end
 
@@ -78,5 +78,40 @@ function test_send_recv()
 end
 
 end
+
+local _ENV = TEST_CASE'user queue'           if true  then
+
+local zpool_core = zpool
+local zpool = require"lzmq.pool"
+
+local ctx, pool
+
+function setup()
+  zpool.init(1)
+  ctx = assert(zmq.context())
+end
+
+function teardown()
+  if ctx then ctx:destroy() end
+  zpool.close()
+end
+
+function test()
+  pool = assert(zpool.new(1))
+  pool:init(ctx, 1, {zmq.REQ})
+  assert_equal(1, pool:size())
+  pool:acquire(function(s)
+    assert_equal(0, pool:size())
+  end)
+  assert_equal(1, pool:size())
+
+  -- we can put new sockets
+  pool:init(ctx, 1, {zmq.REQ})
+  assert_equal(2, pool:size())
+end
+
+
+end
+
 
 if not HAS_RUNNER then lunit.run() end

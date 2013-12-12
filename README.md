@@ -56,7 +56,7 @@ local POOL, TID = ...
 local pool = zpool.new(POOL)
 
 for i = 1, 5 do
-  pool:aquire(function(s)
+  pool:acquire(function(s)
     print(TID, s:send("hello"))
     print(TID, s:recv())
   end)

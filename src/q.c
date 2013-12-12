@@ -273,7 +273,7 @@ static int pool_capacity(lua_State *L){
 
 static int pool_size(lua_State *L){
   qvoid_t *q = pool_at(L, 1);
-  lua_pushnumber(L, qvoid_capacity(q));
+  lua_pushnumber(L, qvoid_size(q));
   return 1;
 }
 
