@@ -28,12 +28,20 @@ function socket_pool:init(ctx, n, opt)
   return self
 end
 
+local aquire_s
 function socket_pool:aquire(cb)
   local id  = self._private.id
   local h   = zpool.get(id)
 
   assert(type(h) == 'userdata')
-  s = zmq.assert(zmq.init_socket(h))
+  
+  if aquire_s then
+    zmq.assert(aquire_s:reset_handle(h))
+  else
+    aquire_s = zmq.assert(zmq.init_socket(h))
+  end
+
+  local s = aquire_s
 
   if cb then
     local ok, err = pcall(cb, s)
