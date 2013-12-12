@@ -57,6 +57,20 @@ function socket_pool:acquire(cb)
   return ret
 end
 
+function socket_pool:lock(cb)
+  local id  = self._private.id
+  local ok = zpool.lock(id)
+  if ok ~= 0 then return nil, "can not lock pool: " .. tostring(ok) end
+
+  local ok, ret = pcall(cb, self)
+
+  assert(0 == zpool.unlock(id))
+
+  if not ok then return error(tostring(ret)) end
+
+  return ret
+end
+
 function socket_pool:size()
   return zpool.size(self._private.id)
 end

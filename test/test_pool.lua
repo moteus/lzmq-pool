@@ -96,7 +96,7 @@ function teardown()
   zpool.close()
 end
 
-function test()
+function test_acquire()
   pool = assert(zpool.new(1))
   pool:init(ctx, 1, {zmq.REQ})
   assert_equal(1, pool:size())
@@ -105,11 +105,31 @@ function test()
   end)
   assert_equal(1, pool:size())
 
+  -- only callback mode
+  assert_error(function() pool:acquire() end)
+
+  assert_error(function()
+    pool:acquire(function(s)
+      error("some_error")
+    end)
+  end)
+  assert_equal(1, pool:size())
+
   -- we can put new sockets
   pool:init(ctx, 1, {zmq.REQ})
   assert_equal(2, pool:size())
 end
 
+function test_lock()
+  pool = assert(zpool.new(1))
+  pool:lock(function(p)
+    assert_equal(pool, p)
+  end)
+
+  -- only callback mode
+  assert_error(function() pool:lock() end)
+
+end
 
 end
 

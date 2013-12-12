@@ -158,6 +158,14 @@ int qvoid_put(qvoid_t *q, void *data){
   return 0;
 }
 
+int qvoid_lock(qvoid_t *q){
+  return pthread_mutex_lock(&q->mutex);
+}
+
+int qvoid_unlock(qvoid_t *q){
+  return pthread_mutex_unlock(&q->mutex);
+}
+
 int qvoid_get(qvoid_t *q, void **data){
   int ret = pthread_mutex_lock(&q->mutex);
   if(ret != 0) return ret;
@@ -277,6 +285,18 @@ static int pool_size(lua_State *L){
   return 1;
 }
 
+static int pool_lock(lua_State *L){
+  qvoid_t *q = pool_at(L, 1);
+  lua_pushnumber(L, qvoid_lock(q));
+  return 1;
+}
+
+static int pool_unlock(lua_State *L){
+  qvoid_t *q = pool_at(L, 1);
+  lua_pushnumber(L, qvoid_unlock(q));
+  return 1;
+}
+
 static int pool_close(lua_State *L){
   if(s_queue){
     int i = s_queue_size;
@@ -296,6 +316,8 @@ static const struct luaL_Reg l_pool_lib[] = {
   { "init",          pool_init          },
   { "put",           pool_put           },
   { "get",           pool_get           },
+  { "lock",          pool_lock          },
+  { "unlock",        pool_unlock        },
   { "capacity",      pool_capacity      },
   { "size",          pool_size          },
   { "close",         pool_close         },
