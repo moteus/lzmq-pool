@@ -4,9 +4,40 @@
 #include <memory.h>
 #include <stdlib.h>
 
-#if !defined(_WIN32) || defined(USE_PTHREAD)
+#if !defined(_WIN32) && !defined(USE_PTHREAD)
+#  define USE_PTHREAD
+#endif
+
+#ifdef USE_PTHREAD
 
 #include <pthread.h>
+#include <sys/time.h>
+#include <time.h>
+
+int pthread_cond_timedwait_timeout(pthread_cond_t *cond, pthread_mutex_t *mutex, int timeout){
+  struct timespec ts;
+  int sc = timeout / 1000;
+  int ns = (timeout % 1000) * 1000 * 1000;
+
+#ifdef CLOCK_MONOTONIC_RAW
+  int ret = clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+  if(ret == INIT_NEGONE) return -1;
+  ts.tv_sec  += sc;
+  ts.tv_nsec += ns;
+#elif defined CLOCK_MONOTONIC
+  int ret = clock_gettime(CLOCK_MONOTONIC, &ts);
+  if(ret == INIT_NEGONE) return -1;
+  ts.tv_sec  += sc;
+  ts.tv_nsec += ns;
+#else
+  struct timeval now;
+  gettimeofday(&now, 0);
+  ts.tv_sec  = now.tv_sec + sc;         // sec
+  ts.tv_nsec = now.tv_usec * 1000 + ns; // nsec
+#endif
+
+  return pthread_cond_timedwait(cond, mutex, &ts);
+}
 
 #else
 
@@ -71,7 +102,7 @@ int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex){
   return pthread_mutex_lock(mutex);
 }
 
-int pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex, DWORD timeout){
+int pthread_cond_timedwait_timeout(pthread_cond_t *cond, pthread_mutex_t *mutex, DWORD timeout){
   DWORD ret = SignalObjectAndWait(*mutex, *cond, timeout, FALSE);
   int rc = pthread_mutex_lock(mutex);
   if(rc != 0) return rc;
@@ -107,11 +138,28 @@ typedef struct qvoid_tag{
 } qvoid_t;
 
 int qvoid_init(qvoid_t *q){
+  pthread_condattr_t *pcondattr = NULL;
+
+#ifdef USE_PTHREAD
+  pthread_condattr_t condattr;
+  pcondattr = &condattr;
+#endif
+
   memset((void*)q, 0, sizeof(qvoid_t));
+
+#ifdef USE_PTHREAD
+  pthread_condattr_init(pcondattr);
+#ifdef CLOCK_MONOTONIC_RAW
+  pthread_condattr_setclock(pcondattr, CLOCK_MONOTONIC_RAW);
+#elif defined CLOCK_MONOTONIC
+  pthread_condattr_setclock(pcondattr, CLOCK_MONOTONIC);
+#endif
+#endif
+
   if(0 != pthread_mutex_init(&q->mutex, NULL)){
     return -1;
   }
-  if(0 != pthread_cond_init(&q->cond, NULL)){
+  if(0 != pthread_cond_init(&q->cond, pcondattr)){
     pthread_mutex_destroy(&q->mutex);
     return -1;
   }
@@ -147,7 +195,29 @@ int qvoid_put(qvoid_t *q, void *data){
   if(ret != 0) return ret;
   while(qvoid_full(q)){
     ret = pthread_cond_wait(&q->cond, &q->mutex);
-    if(ret != 0) return ret;
+    if(ret != 0){
+      pthread_mutex_unlock(&q->mutex);
+      return ret;
+    }
+  }
+
+  q->arr[q->count++] = data;
+  assert(q->count <= qvoid_capacity(q));
+
+  pthread_cond_broadcast(&q->cond);
+  pthread_mutex_unlock(&q->mutex);
+  return 0;
+}
+
+int qvoid_put_timeout(qvoid_t *q, void *data, int ms){
+  int ret = pthread_mutex_lock(&q->mutex);
+  if(ret != 0) return ret;
+  while(qvoid_full(q)){
+    ret = pthread_cond_timedwait_timeout(&q->cond, &q->mutex, ms);
+    if(ret != 0){
+      pthread_mutex_unlock(&q->mutex);
+      return ret;
+    }
   }
 
   q->arr[q->count++] = data;
@@ -171,7 +241,29 @@ int qvoid_get(qvoid_t *q, void **data){
   if(ret != 0) return ret;
   while(qvoid_empty(q)){
     ret = pthread_cond_wait(&q->cond, &q->mutex);
-    if(ret != 0) return ret;
+    if(ret != 0){
+      pthread_mutex_unlock(&q->mutex);
+      return ret;
+    }
+  }
+
+  assert(q->count > 0);
+  *data = q->arr[--q->count];
+
+  pthread_cond_broadcast(&q->cond);
+  pthread_mutex_unlock(&q->mutex);
+  return 0;
+}
+
+int qvoid_get_timeout(qvoid_t *q, void **data, int ms){
+  int ret = pthread_mutex_lock(&q->mutex);
+  if(ret != 0) return ret;
+  while(qvoid_empty(q)){
+    ret = pthread_cond_timedwait_timeout(&q->cond, &q->mutex, ms);
+    if(ret != 0){
+      pthread_mutex_unlock(&q->mutex);
+      return ret;
+    }
   }
 
   assert(q->count > 0);
@@ -243,6 +335,16 @@ static int pool_put_impl(lua_State *L){
   return 1;
 }
 
+static int pool_put_timeout_impl(lua_State *L){
+  qvoid_t *q = pool_at(L, 1);
+  void *data = lua_touserdata(L, 2);
+  int ms = luaL_optint(L, 3, 0);
+  int ret = qvoid_put(q, data);
+  if(ret == ETIMEDOUT) lua_pushliteral(L, "timeout");
+  else lua_pushnumber(L, ret);
+  return 1;
+}
+
 static int pool_put(lua_State *L){
   int t = lua_type(L, 2);
 
@@ -264,12 +366,46 @@ static int pool_put(lua_State *L){
   return 0;
 }
 
+static int pool_put_timeout(lua_State *L){
+  int t = lua_type(L, 2);
+
+  if(LUA_TLIGHTUSERDATA == t){
+    return pool_put_timeout_impl(L);
+  }
+
+  if(LUA_TSTRING == t){
+    pool_str_to_lightud(L, 2);
+    return pool_put_timeout_impl(L);
+  }
+
+  if(LUA_TTHREAD < t){
+    pool_ffi_to_lightud(L, 2);
+    return pool_put_timeout_impl(L);
+  }
+
+  luaL_argcheck(L, 0, 2, "lightuserdata/ffi cdata/string expected");
+  return 0;
+}
+
 static int pool_get(lua_State *L){
   qvoid_t *q = pool_at(L, 1);
   void *data;
   int rc = qvoid_get(q, &data);
   if(rc == 0)lua_pushlightuserdata(L, data);
   else lua_pushnumber(L, rc);
+  return 1;
+}
+
+static int pool_get_timeout(lua_State *L){
+  qvoid_t *q = pool_at(L, 1);
+  void *data;
+  int ms = luaL_optint(L, 2, 0);
+  int rc = qvoid_get_timeout(q, &data, ms);
+  if(rc == 0)lua_pushlightuserdata(L, data);
+  else if(rc == ETIMEDOUT)
+    lua_pushliteral(L, "timeout");
+  else
+    lua_pushnumber(L, rc);
   return 1;
 }
 
@@ -315,7 +451,9 @@ static int pool_close(lua_State *L){
 static const struct luaL_Reg l_pool_lib[] = {
   { "init",          pool_init          },
   { "put",           pool_put           },
+  { "put_timeout",   pool_put_timeout   },
   { "get",           pool_get           },
+  { "get_timeout",   pool_get_timeout   },
   { "lock",          pool_lock          },
   { "unlock",        pool_unlock        },
   { "capacity",      pool_capacity      },

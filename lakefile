@@ -11,6 +11,7 @@ core = c.shared{'core',
   base     = 'src',
   src      = '*.c',
   needs    = LUA_NEED,
+  defines  = DEFINES,
   dynamic  = DYNAMIC,
   strip    = true,
   libs     = IF(not MSVC, 'pthread');

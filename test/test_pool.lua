@@ -7,8 +7,11 @@ local IS_LUA52   = _VERSION >= 'Lua 5.2'
 
 local ECHO_ADDR  = "inproc://echo"
 
-local zmq   = require "lzmq"
-local zpool = require "lzmq.pool.core"
+local zmq    = require "lzmq"
+local ztimer = require "lzmq.timer"
+local zpool  = require "lzmq.pool.core"
+
+local zmsg   = zmq.msg_init_data("H")
 
 print("------------------------------------")
 print("Lua version: " .. (_G.jit and _G.jit.version or _G._VERSION))
@@ -46,6 +49,29 @@ function test_init_close()
   assert_equal(0, zpool.close())
 
   assert_error(function() zpool.size(0) end)
+end
+
+function test_timeout()
+  assert_equal(0, zpool.init(1))
+  assert_equal(0, zpool.size(0))
+  local timeout = 1500
+  local epselon = 490
+
+  timer = ztimer.monotonic():start()
+  assert_equal("timeout", zpool.get_timeout(0, timeout))
+  local elapsed = timer:stop()
+  assert(elapsed > (timeout-epselon), "Expeted " .. timeout .. "(+/-" .. epselon .. ") got: " .. elapsed)
+  assert(elapsed < (timeout+epselon), "Expeted " .. timeout .. "(+/-" .. epselon .. ") got: " .. elapsed)
+
+  timer:start()
+  assert_equal("timeout", zpool.get_timeout(0, timeout))
+  local elapsed = timer:stop()
+  assert(elapsed > (timeout-epselon), "Expeted " .. timeout .. "(+/-" .. epselon .. ") got: " .. elapsed)
+  assert(elapsed < (timeout+epselon), "Expeted " .. timeout .. "(+/-" .. epselon .. ") got: " .. elapsed)
+
+  assert_equal(0, zpool.put(0, zmsg:pointer()))
+  assert_userdata(zpool.get_timeout(0, timeout))
+
 end
 
 end

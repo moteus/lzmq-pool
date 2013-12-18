@@ -65,7 +65,7 @@
 				OutputFile="$(OutDir)core.dll"
 				LinkIncremental="2"
 				AdditionalLibraryDirectories="$(LUA_DIR_5_2)\lib"
-				ModuleDefinitionFile="$(ProjectDir)..\src\pool.def"
+				ModuleDefinitionFile="$(ProjectDir)..\src\core.def"
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				TargetMachine="1"
