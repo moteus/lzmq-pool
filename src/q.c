@@ -21,12 +21,12 @@ int pthread_cond_timedwait_timeout(pthread_cond_t *cond, pthread_mutex_t *mutex,
 
 #ifdef CLOCK_MONOTONIC_RAW
   int ret = clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-  if(ret == INIT_NEGONE) return -1;
+  if(ret) return -1;
   ts.tv_sec  += sc;
   ts.tv_nsec += ns;
 #elif defined CLOCK_MONOTONIC
   int ret = clock_gettime(CLOCK_MONOTONIC, &ts);
-  if(ret == INIT_NEGONE) return -1;
+  if(ret) return -1;
   ts.tv_sec  += sc;
   ts.tv_nsec += ns;
 #else
