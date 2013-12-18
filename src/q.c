@@ -20,7 +20,7 @@ int pthread_cond_timedwait_timeout(pthread_cond_t *cond, pthread_mutex_t *mutex,
   int ns = (timeout % 1000) * 1000 * 1000;
 
 #ifdef CLOCK_MONOTONIC_RAW
-  int ret = clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+  int ret = clock_gettime(CLOCK_MONOTONIC, &ts);
   if(ret) return -1;
   ts.tv_sec  += sc;
   ts.tv_nsec += ns;
@@ -150,7 +150,7 @@ int qvoid_init(qvoid_t *q){
 #ifdef USE_PTHREAD
   pthread_condattr_init(pcondattr);
 #ifdef CLOCK_MONOTONIC_RAW
-  pthread_condattr_setclock(pcondattr, CLOCK_MONOTONIC_RAW);
+  pthread_condattr_setclock(pcondattr, CLOCK_MONOTONIC);
 #elif defined CLOCK_MONOTONIC
   pthread_condattr_setclock(pcondattr, CLOCK_MONOTONIC);
 #endif
