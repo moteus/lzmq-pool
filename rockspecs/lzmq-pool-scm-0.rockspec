@@ -25,7 +25,7 @@ build = {
   platforms = {
     unix    = { modules = {
       ["lzmq.pool.core"] = {
-        libraries = {"pthread"},
+        libraries = {"pthread", "rt"},
       }
     }},
 
