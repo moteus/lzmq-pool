@@ -14,6 +14,9 @@
 #include <sys/time.h>
 #include <time.h>
 
+#undef CLOCK_MONOTONIC_RAW
+#undef CLOCK_MONOTONIC
+
 int pthread_cond_timedwait_timeout(pthread_cond_t *cond, pthread_mutex_t *mutex, int timeout){
   struct timespec ts;
   int sc = timeout / 1000;
@@ -339,7 +342,7 @@ static int pool_put_timeout_impl(lua_State *L){
   qvoid_t *q = pool_at(L, 1);
   void *data = lua_touserdata(L, 2);
   int ms = luaL_optint(L, 3, 0);
-  int ret = qvoid_put(q, data);
+  int ret = qvoid_put_timeout(q, data, ms);
   if(ret == ETIMEDOUT) lua_pushliteral(L, "timeout");
   else lua_pushnumber(L, ret);
   return 1;
