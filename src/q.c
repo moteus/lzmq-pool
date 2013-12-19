@@ -41,7 +41,7 @@ int pthread_cond_timedwait_timeout(pthread_cond_t *cond, pthread_mutex_t *mutex,
   ts.tv_nsec = now.tv_usec * 1000 + ns; // nsec
 #endif
 
-  ts.tv_sec   += ts.tv_nsec /  1000000000;
+  ts.tv_sec  += ts.tv_nsec / 1000000000;
   ts.tv_nsec %= 1000000000;
 
   ret = pthread_cond_timedwait(cond, mutex, &ts);
@@ -337,63 +337,40 @@ static void* pool_str_to_lightud(lua_State *L, int idx){
   return *data;
 }
 
-static int pool_put_impl(lua_State *L){
+static void* ensure_lud(lua_State *L, int idx){
+  int t = lua_type(L, idx);
+  
+  if(LUA_TLIGHTUSERDATA == t){
+    return lua_touserdata(L, idx);
+  }
+
+  if(LUA_TSTRING == t){
+    return pool_str_to_lightud(L, idx);
+  }
+
+  if(LUA_TTHREAD < t){
+    return pool_ffi_to_lightud(L, idx);
+  }
+
+  luaL_argcheck(L, 0, idx, "lightuserdata/ffi cdata/string expected");
+  return 0;
+}
+
+static int pool_put(lua_State *L){
   qvoid_t *q = pool_at(L, 1);
-  void *data = lua_touserdata(L, 2);
+  void *data = ensure_lud(L, 2);
   lua_pushnumber(L, qvoid_put(q, data));
   return 1;
 }
 
-static int pool_put_timeout_impl(lua_State *L){
+static int pool_put_timeout(lua_State *L){
   qvoid_t *q = pool_at(L, 1);
-  void *data = lua_touserdata(L, 2);
-  int ms = luaL_optint(L, 3, 0);
-  int ret = qvoid_put_timeout(q, data, ms);
+  void *data = ensure_lud(L, 2);
+  int ms     = luaL_optint(L, 3, 0);
+  int ret    = qvoid_put_timeout(q, data, ms);
   if(ret == ETIMEDOUT) lua_pushliteral(L, "timeout");
   else lua_pushnumber(L, ret);
   return 1;
-}
-
-static int pool_put(lua_State *L){
-  int t = lua_type(L, 2);
-
-  if(LUA_TLIGHTUSERDATA == t){
-    return pool_put_impl(L);
-  }
-
-  if(LUA_TSTRING == t){
-    pool_str_to_lightud(L, 2);
-    return pool_put_impl(L);
-  }
-
-  if(LUA_TTHREAD < t){
-    pool_ffi_to_lightud(L, 2);
-    return pool_put_impl(L);
-  }
-
-  luaL_argcheck(L, 0, 2, "lightuserdata/ffi cdata/string expected");
-  return 0;
-}
-
-static int pool_put_timeout(lua_State *L){
-  int t = lua_type(L, 2);
-
-  if(LUA_TLIGHTUSERDATA == t){
-    return pool_put_timeout_impl(L);
-  }
-
-  if(LUA_TSTRING == t){
-    pool_str_to_lightud(L, 2);
-    return pool_put_timeout_impl(L);
-  }
-
-  if(LUA_TTHREAD < t){
-    pool_ffi_to_lightud(L, 2);
-    return pool_put_timeout_impl(L);
-  }
-
-  luaL_argcheck(L, 0, 2, "lightuserdata/ffi cdata/string expected");
-  return 0;
 }
 
 static int pool_get(lua_State *L){
