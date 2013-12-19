@@ -218,6 +218,17 @@ int qvoid_put(qvoid_t *q, void *data){
   return 0;
 }
 
+int qvoid_put_nolock(qvoid_t *q, void *data){
+  if(qvoid_full(q)){
+    return -1;
+  }
+
+  q->arr[q->count++] = data;
+  assert(q->count <= qvoid_capacity(q));
+
+  return 0;
+}
+
 int qvoid_put_timeout(qvoid_t *q, void *data, int ms){
   int ret = pthread_mutex_lock(&q->mutex);
   if(ret != 0) return ret;
@@ -245,6 +256,10 @@ int qvoid_unlock(qvoid_t *q){
   return pthread_mutex_unlock(&q->mutex);
 }
 
+int qvoid_notify(qvoid_t *q){
+  return pthread_cond_broadcast(&q->cond);
+}
+
 int qvoid_get(qvoid_t *q, void **data){
   int ret = pthread_mutex_lock(&q->mutex);
   if(ret != 0) return ret;
@@ -261,6 +276,18 @@ int qvoid_get(qvoid_t *q, void **data){
 
   pthread_cond_broadcast(&q->cond);
   pthread_mutex_unlock(&q->mutex);
+  return 0;
+}
+
+int qvoid_get_nolock(qvoid_t *q, void **data){
+  if(qvoid_empty(q)){
+    *data = NULL;
+    return -1;
+  }
+
+  assert(q->count > 0);
+  *data = q->arr[--q->count];
+
   return 0;
 }
 
@@ -363,6 +390,13 @@ static int pool_put(lua_State *L){
   return 1;
 }
 
+static int pool_put_nolock(lua_State *L){
+  qvoid_t *q = pool_at(L, 1);
+  void *data = ensure_lud(L, 2);
+  lua_pushnumber(L, qvoid_put_nolock(q, data));
+  return 1;
+}
+
 static int pool_put_timeout(lua_State *L){
   qvoid_t *q = pool_at(L, 1);
   void *data = ensure_lud(L, 2);
@@ -379,6 +413,13 @@ static int pool_get(lua_State *L){
   int rc = qvoid_get(q, &data);
   if(rc == 0)lua_pushlightuserdata(L, data);
   else lua_pushnumber(L, rc);
+  return 1;
+}
+
+static int pool_get_nolock(lua_State *L){
+  qvoid_t *q = pool_at(L, 1);
+  void *data; int rc = qvoid_get_nolock(q, &data);
+  if(rc == 0)lua_pushlightuserdata(L, data); else lua_pushnil(L);
   return 1;
 }
 
@@ -415,6 +456,7 @@ static int pool_lock(lua_State *L){
 
 static int pool_unlock(lua_State *L){
   qvoid_t *q = pool_at(L, 1);
+  if(lua_toboolean(L,2)) qvoid_notify(q);
   lua_pushnumber(L, qvoid_unlock(q));
   return 1;
 }
@@ -437,8 +479,10 @@ static int pool_close(lua_State *L){
 static const struct luaL_Reg l_pool_lib[] = {
   { "init",          pool_init          },
   { "put",           pool_put           },
+  { "put_nolock",    pool_put_nolock    },
   { "put_timeout",   pool_put_timeout   },
   { "get",           pool_get           },
+  { "get_nolock",    pool_get_nolock    },
   { "get_timeout",   pool_get_timeout   },
   { "lock",          pool_lock          },
   { "unlock",        pool_unlock        },

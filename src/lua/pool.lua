@@ -29,11 +29,21 @@ function socket_pool:init(ctx, n, opt)
 end
 
 local aquire_s
-function socket_pool:acquire(cb)
+function socket_pool:acquire(timeout, cb)
+  if not cb then cb, timeout = timeout, -1 end
+  assert(type(timeout) == 'number')
+  assert(timeout >= -1)
   assert(cb) -- cb is callable
 
   local id  = self._private.id
-  local h   = zpool.get(id)
+  local h
+  if timeout < 0 then
+    h = zpool.get(id)
+  else
+    h = zpool.get_timeout(id, timeout)
+  end
+
+  if h == 'timeout' then return nil, zmq.error(zmq.errors.EAGAIN) end
 
   assert(type(h) == 'userdata')
   
@@ -44,11 +54,6 @@ function socket_pool:acquire(cb)
   end
 
   local ok, ret = pcall(cb, aquire_s)
-
-  -- if not aquire_s:closed() then
-  --   -- if user code change handle of socket
-  --   h = aquire_s:reset_handle(h)
-  -- end
 
   assert(0 == zpool.put(id, h))
 

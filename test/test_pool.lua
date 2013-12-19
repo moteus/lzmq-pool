@@ -20,6 +20,8 @@ print("")
 
 local _ENV = TEST_CASE'core queue'           if true  then
 
+local timeout, epselon = 1500, 490
+
 function setup() end
 
 function teardown() zpool.close() end
@@ -54,8 +56,6 @@ end
 function test_timeout()
   assert_equal(0, zpool.init(1))
   assert_equal(0, zpool.size(0))
-  local timeout = 1500
-  local epselon = 490
 
   timer = ztimer.monotonic():start()
   assert_equal("timeout", zpool.get_timeout(0, timeout))
@@ -112,6 +112,8 @@ local zpool = require"lzmq.pool"
 
 local ctx, pool
 
+local timeout, epselon = 1500, 490
+
 function setup()
   zpool.init(1)
   ctx = assert(zmq.context())
@@ -157,7 +159,21 @@ function test_lock()
 
 end
 
+function test_timeout()
+  pool = assert(zpool.new(1))
+
+  for i = 1, 3 do
+    local timer = ztimer.monotonic():start()
+    local ok, err = assert_nil(pool:acquire(timeout, function() end))
+    local elapsed = timer:stop()
+    assert(err)
+    assert_equal("EAGAIN", err:mnemo())
+    assert(elapsed > (timeout-epselon), "Expeted " .. timeout .. "(+/-" .. epselon .. ") got: " .. elapsed)
+    assert(elapsed < (timeout+epselon), "Expeted " .. timeout .. "(+/-" .. epselon .. ") got: " .. elapsed)
+  end
+
 end
 
+end
 
 if not HAS_RUNNER then lunit.run() end
