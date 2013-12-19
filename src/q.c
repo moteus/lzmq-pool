@@ -12,34 +12,40 @@
 
 #include <pthread.h>
 #include <sys/time.h>
-#include <time.h>
 
-#undef CLOCK_MONOTONIC_RAW
-#undef CLOCK_MONOTONIC
+// CLOCK_MONOTONIC_RAW does not work on travis-ci and on LinuxMint 15
+// it returns ETIMEDOUT immediately
+#ifdef CLOCK_MONOTONIC_RAW
+#  undef CLOCK_MONOTONIC_RAW
+#endif
 
 int pthread_cond_timedwait_timeout(pthread_cond_t *cond, pthread_mutex_t *mutex, int timeout){
   struct timespec ts;
   int sc = timeout / 1000;
   int ns = (timeout % 1000) * 1000 * 1000;
-
+  int ret;
 #ifdef CLOCK_MONOTONIC_RAW
-  int ret = clock_gettime(CLOCK_MONOTONIC, &ts);
+  ret = clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
   if(ret) return -1;
   ts.tv_sec  += sc;
   ts.tv_nsec += ns;
 #elif defined CLOCK_MONOTONIC
-  int ret = clock_gettime(CLOCK_MONOTONIC, &ts);
+  ret = clock_gettime(CLOCK_MONOTONIC, &ts);
   if(ret) return -1;
   ts.tv_sec  += sc;
   ts.tv_nsec += ns;
 #else
   struct timeval now;
-  gettimeofday(&now, 0);
+  ret = gettimeofday(&now, 0);
   ts.tv_sec  = now.tv_sec + sc;         // sec
   ts.tv_nsec = now.tv_usec * 1000 + ns; // nsec
 #endif
 
-  return pthread_cond_timedwait(cond, mutex, &ts);
+  ts.tv_sec   += ts.tv_nsec /  1000000000;
+  ts.tv_nsec %= 1000000000;
+
+  ret = pthread_cond_timedwait(cond, mutex, &ts);
+  return ret;
 }
 
 #else
@@ -153,7 +159,7 @@ int qvoid_init(qvoid_t *q){
 #ifdef USE_PTHREAD
   pthread_condattr_init(pcondattr);
 #ifdef CLOCK_MONOTONIC_RAW
-  pthread_condattr_setclock(pcondattr, CLOCK_MONOTONIC);
+  pthread_condattr_setclock(pcondattr, CLOCK_MONOTONIC_RAW);
 #elif defined CLOCK_MONOTONIC
   pthread_condattr_setclock(pcondattr, CLOCK_MONOTONIC);
 #endif
