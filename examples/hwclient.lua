@@ -1,3 +1,6 @@
+-- Hello World client (http://zguide.zeromq.org/page:all)
+-- Use one socket from two os threads.
+
 local zmq      = require "lzmq"
 local zthreads = require "lzmq.threads"
 

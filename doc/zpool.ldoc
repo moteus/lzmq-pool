@@ -1,0 +1,63 @@
+--- ZMQ socket pool.
+-- This library provide ability to use same sockets from different 
+-- Lua states / threads in same process.
+-- 
+
+--- Init library with N sockets pools.
+-- You should guarantee thread safe for call of this function.
+-- You could call this function from any thread.
+-- Second call of this function just return true 
+-- but does not change numbers of pools.
+-- Pools keep alive until library (.so/.dll) is loaded in process
+-- or until call zpool.close().
+--
+-- @tparam number N number of pools.
+-- @treturn bool true
+-- @raise error if there occurs some error 
+function init() end
+
+--- Desroy all internals pools.
+-- This function does not close any socket but just free internal buffers.
+function close() end
+
+--- Create new Pool object.
+-- 
+-- @tparam number PN pool number starting from 1 ([1 .. N])
+-- @treturn Pool object.
+function new() end
+
+--- 
+-- @type Pool
+--
+do
+
+--- Create N sockets and store them in pool.
+--
+-- @tparam lzmq.Context ctx zmq context to creates sockets
+-- @tparam number N number of sockets to create
+-- @tparam table sockets options
+-- @treturn Pool self
+function Pool:init() end
+
+--- Acquire some socket from pool.
+--
+-- @tparam[opt=-1] number timeout -1 - infinity
+-- @tparam callable callback function.
+--   This function recives one argument - socket.
+--   Function should not close this socket or change its handle.
+-- @return[1] first return value from callback
+-- @treturn[2] nil
+-- @treturn[2] lzmq.Error EAGAIN for timeout
+function Pool:acquire() end
+
+--- Return current number of sockets in pool.
+-- 
+-- @treturn number
+function Pool:size() end
+
+--- Return maximum number of sockets in pool.
+-- 
+-- @treturn number
+function Pool:capacity() end
+
+end
