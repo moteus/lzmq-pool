@@ -30,7 +30,7 @@ end
 
 local function acquire_return(id, h, ok, ...)
   assert(0 == zpool.put(id, h))
-  if not ok then return error(tostring(ret)) end
+  if not ok then return error(tostring((...))) end
   return ...
 end
 

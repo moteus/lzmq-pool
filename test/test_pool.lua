@@ -140,7 +140,7 @@ function test_acquire()
   -- only callback mode
   assert_error(function() pool:acquire() end)
 
-  assert_error(function()
+  assert_error_match('some_error', function()
     pool:acquire(function(s)
       error("some_error")
     end)
