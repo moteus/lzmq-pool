@@ -28,6 +28,12 @@ function socket_pool:init(ctx, n, opt)
   return self
 end
 
+local function acquire_return(id, h, ok, ...)
+  assert(0 == zpool.put(id, h))
+  if not ok then return error(tostring(ret)) end
+  return ...
+end
+
 local aquire_s
 function socket_pool:acquire(timeout, cb)
   if not cb then cb, timeout = timeout, -1 end
@@ -53,13 +59,7 @@ function socket_pool:acquire(timeout, cb)
     aquire_s = zmq.assert(zmq.init_socket(h))
   end
 
-  local ok, ret = pcall(cb, aquire_s)
-
-  assert(0 == zpool.put(id, h))
-
-  if not ok then return error(tostring(ret)) end
-  
-  return ret
+  return acquire_return(id, h, pcall(cb, aquire_s))
 end
 
 function socket_pool:lock(cb)

@@ -13,6 +13,10 @@ local zpool  = require "lzmq.pool.core"
 
 local zmsg   = zmq.msg_init_data("H")
 
+local function return_count(...)
+  return select('#', ...), ...
+end
+
 print("------------------------------------")
 print("Lua version: " .. (_G.jit and _G.jit.version or _G._VERSION))
 print("------------------------------------")
@@ -146,6 +150,27 @@ function test_acquire()
   -- we can put new sockets
   pool:init(ctx, 1, {zmq.REQ})
   assert_equal(2, pool:size())
+end
+
+function test_multiret()
+  pool = assert(zpool.new(1))
+  pool:init(ctx, 1, {zmq.REQ})
+  assert_equal(1, pool:size())
+  local n,a,b,c,d,e = return_count( pool:acquire(function(s)
+    assert_equal(0, pool:size())
+    return 1, nil, 2, nil, 3
+  end))
+  assert_equal(5, n)
+  assert_equal(1, a)
+  assert_nil(b)
+  assert_equal(2, c)
+  assert_nil(d)
+  assert_equal(3, e)
+
+  local n = return_count( pool:acquire(function(s)
+    assert_equal(0, pool:size())
+  end))
+  assert_equal(0, n)
 end
 
 function test_lock()
