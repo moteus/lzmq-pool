@@ -8,6 +8,20 @@
 #  define USE_PTHREAD
 #endif
 
+#if !defined(USE_BROADCAST) && !defined(USE_SIGNAL)
+#  define USE_SIGNAL
+#endif
+
+#if defined(USE_BROADCAST) && defined(USE_SIGNAL)
+#  error You must specify ether USE_BROADCAST or USE_SIGNAL
+#endif
+
+#ifdef USE_BROADCAST
+#  define PTHREAD_COND_NOTIFY pthread_cond_broadcast
+#else
+#  define PTHREAD_COND_NOTIFY pthread_cond_signal
+#endif
+
 #ifdef USE_PTHREAD
 
 #include <pthread.h>
@@ -19,33 +33,41 @@
 #  undef CLOCK_MONOTONIC_RAW
 #endif
 
-int pthread_cond_timedwait_timeout(pthread_cond_t *cond, pthread_mutex_t *mutex, int timeout){
-  struct timespec ts;
+static int timeout_to_timespec(int timeout, struct timespec* ts){
   int sc = timeout / 1000;
   int ns = (timeout % 1000) * 1000 * 1000;
   int ret;
+
+  if (timeout < 0) return 1;
+
 #ifdef CLOCK_MONOTONIC_RAW
-  ret = clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+  ret = clock_gettime(CLOCK_MONOTONIC_RAW, ts);
   if(ret) return -1;
-  ts.tv_sec  += sc;
-  ts.tv_nsec += ns;
+  ts->tv_sec  += sc;
+  ts->tv_nsec += ns;
 #elif defined CLOCK_MONOTONIC
-  ret = clock_gettime(CLOCK_MONOTONIC, &ts);
+  ret = clock_gettime(CLOCK_MONOTONIC, ts);
   if(ret) return -1;
-  ts.tv_sec  += sc;
-  ts.tv_nsec += ns;
+  ts->tv_sec  += sc;
+  ts->tv_nsec += ns;
 #else
   struct timeval now;
   ret = gettimeofday(&now, 0);
-  ts.tv_sec  = now.tv_sec + sc;         // sec
-  ts.tv_nsec = now.tv_usec * 1000 + ns; // nsec
+  ts->tv_sec  = now.tv_sec + sc;         // sec
+  ts->tv_nsec = now.tv_usec * 1000 + ns; // nsec
 #endif
 
-  ts.tv_sec  += ts.tv_nsec / 1000000000;
-  ts.tv_nsec %= 1000000000;
+  ts->tv_sec  += ts->tv_nsec / 1000000000L;
+  ts->tv_nsec %= 1000000000L;
 
-  ret = pthread_cond_timedwait(cond, mutex, &ts);
-  return ret;
+  return 0;
+}
+
+static int pthread_cond_timedwait_timeout(pthread_cond_t *cond, pthread_mutex_t *mutex, int timeout){
+  struct timespec ts;
+  timeout_to_timespec(timeout, &ts);
+
+  return pthread_cond_timedwait(cond, mutex, &ts);
 }
 
 #else
@@ -98,7 +120,13 @@ int pthread_mutex_destroy(pthread_mutex_t *mutex){
 
 int pthread_cond_init(pthread_cond_t *cond, const pthread_condattr_t *attr){
   assert(attr == NULL);
+
+#ifdef USE_BROADCAST
   *cond = CreateEvent(NULL, TRUE, FALSE, NULL);
+#else
+  *cond = CreateEvent(NULL, FALSE, FALSE, NULL);
+#endif
+
   if(*cond == NULL){
     DWORD ret = GetLastError();
     return (ret == 0)? -1 : ret;
@@ -118,6 +146,11 @@ int pthread_cond_timedwait_timeout(pthread_cond_t *cond, pthread_mutex_t *mutex,
   return (ret == WAIT_TIMEOUT)? ETIMEDOUT : 0;
 }
 
+#ifdef USE_BROADCAST
+/* We can not support both function on same cond variable so we implement
+ * only one just in case.
+ */
+
 int pthread_cond_broadcast(pthread_cond_t *cond){
   if(TRUE == PulseEvent(*cond))
     return 0;
@@ -126,6 +159,19 @@ int pthread_cond_broadcast(pthread_cond_t *cond){
     return (ret == 0)? -1 : ret;
   }
 }
+
+#else
+
+int pthread_cond_signal(pthread_cond_t *cond){
+  if(TRUE == SetEvent(*cond))
+    return 0;
+  else{
+    DWORD ret = GetLastError();
+    return (ret == 0)? -1 : ret;
+  }
+}
+
+#endif
 
 int pthread_cond_destroy(pthread_cond_t *cond){
   CloseHandle(*cond);
@@ -137,7 +183,9 @@ int pthread_cond_destroy(pthread_cond_t *cond){
 
 //{ Queue
 
-#define QVOID_LENGTH 255
+#ifndef QVOID_LENGTH
+#  define QVOID_LENGTH 255
+#endif
 
 typedef struct qvoid_tag{
   pthread_cond_t   cond;
@@ -213,7 +261,7 @@ int qvoid_put(qvoid_t *q, void *data){
   q->arr[q->count++] = data;
   assert(q->count <= qvoid_capacity(q));
 
-  pthread_cond_broadcast(&q->cond);
+  PTHREAD_COND_NOTIFY(&q->cond);
   pthread_mutex_unlock(&q->mutex);
   return 0;
 }
@@ -243,7 +291,7 @@ int qvoid_put_timeout(qvoid_t *q, void *data, int ms){
   q->arr[q->count++] = data;
   assert(q->count <= qvoid_capacity(q));
 
-  pthread_cond_broadcast(&q->cond);
+  PTHREAD_COND_NOTIFY(&q->cond);
   pthread_mutex_unlock(&q->mutex);
   return 0;
 }
@@ -257,7 +305,7 @@ int qvoid_unlock(qvoid_t *q){
 }
 
 int qvoid_notify(qvoid_t *q){
-  return pthread_cond_broadcast(&q->cond);
+  return PTHREAD_COND_NOTIFY(&q->cond);
 }
 
 int qvoid_get(qvoid_t *q, void **data){
@@ -274,7 +322,7 @@ int qvoid_get(qvoid_t *q, void **data){
   assert(q->count > 0);
   *data = q->arr[--q->count];
 
-  pthread_cond_broadcast(&q->cond);
+  PTHREAD_COND_NOTIFY(&q->cond);
   pthread_mutex_unlock(&q->mutex);
   return 0;
 }
@@ -305,7 +353,7 @@ int qvoid_get_timeout(qvoid_t *q, void **data, int ms){
   assert(q->count > 0);
   *data = q->arr[--q->count];
 
-  pthread_cond_broadcast(&q->cond);
+  PTHREAD_COND_NOTIFY(&q->cond);
   pthread_mutex_unlock(&q->mutex);
   return 0;
 }
@@ -499,5 +547,3 @@ int luaopen_lzmq_pool_core(lua_State *L){
   luaL_setfuncs(L, l_pool_lib, 0);
   return 1;
 }
-
-
