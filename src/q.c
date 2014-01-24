@@ -358,6 +358,14 @@ int qvoid_get_timeout(qvoid_t *q, void **data, int ms){
   return 0;
 }
 
+int qvoid_clear(qvoid_t *q){
+  int ret = pthread_mutex_lock(&q->mutex);
+  if(ret != 0) return ret;
+  q->count = 0;
+  pthread_mutex_unlock(&q->mutex);
+  return 0;
+}
+
 //}
 
 //{ Lua interface
@@ -496,6 +504,12 @@ static int pool_size(lua_State *L){
   return 1;
 }
 
+static int pool_clear(lua_State *L){
+  qvoid_t *q = pool_at(L, 1);
+  lua_pushnumber(L, qvoid_clear(q));
+  return 1;
+}
+
 static int pool_lock(lua_State *L){
   qvoid_t *q = pool_at(L, 1);
   lua_pushnumber(L, qvoid_lock(q));
@@ -536,6 +550,7 @@ static const struct luaL_Reg l_pool_lib[] = {
   { "unlock",        pool_unlock        },
   { "capacity",      pool_capacity      },
   { "size",          pool_size          },
+  { "clear",         pool_clear         },
   { "close",         pool_close         },
   {NULL, NULL}
 };

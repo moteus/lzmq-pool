@@ -78,6 +78,18 @@ function test_timeout()
 
 end
 
+function test_clear()
+  assert_equal(0, zpool.init(1))
+  assert_equal(0, zpool.size(0))
+
+  assert_equal(0, zpool.put(0, zmsg:pointer()))
+  assert_equal(0, zpool.put(0, zmsg:pointer()))
+
+  assert_equal(2, zpool.size(0))
+  assert_equal(0, zpool.clear(0))
+  assert_equal(0, zpool.size(0))
+end
+
 end
 
 local _ENV = TEST_CASE'Clone socket'         if true  then
