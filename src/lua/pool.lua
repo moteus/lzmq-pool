@@ -1,5 +1,8 @@
-local zmq   = require "lzmq"
-local zpool = require "lzmq.pool.core"
+local zmq    = require "lzmq"
+local zpool  = require "lzmq.pool.core"
+local table  = require "table"
+local string = require "string"
+local math   = require "math"
 
 local socket_pool = {} do
 socket_pool.__index = socket_pool
