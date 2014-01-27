@@ -371,26 +371,45 @@ int qvoid_clear(qvoid_t *q){
 //{ Lua interface
 
 static volatile size_t s_queue_size = 0;
-static qvoid_t *s_queue = NULL;
+static qvoid_t **s_queue = NULL;
+
+static void pool_cleanup(){
+  int i;
+  for(i = 0; i < s_queue_size; ++i){
+    qvoid_destroy(s_queue[i]);
+    free(s_queue[i]);
+  }
+  free(s_queue);
+  s_queue = NULL;
+  s_queue_size = 0;
+}
 
 static int pool_init(lua_State *L){
   int n = luaL_checkint(L, 1);
   luaL_argcheck(L, n > 0, 1, "must be positive");
   if(!s_queue){
     int i;
-    s_queue = (qvoid_t*)malloc(n * sizeof(qvoid_t));
-    if(!s_queue) return -1;
-    for(i = 0; i < n; ++i){
-      if(0 != qvoid_init(&s_queue[i])){
-        while(--i >= 0){
-          qvoid_destroy(&s_queue[i]);
-        }
-        free(s_queue);
-        s_queue = NULL;
-        return -1;
-      }
+    s_queue_size = 0;
+    s_queue = (qvoid_t**)malloc(n * sizeof(qvoid_t*));
+    if(!s_queue){
+      lua_pushnumber(L, -1);
+      return 1;
     }
-    s_queue_size = n;
+    for(i = 0; i < n; ++i){
+      s_queue[i] = (qvoid_t*)malloc(sizeof(qvoid_t));
+      if(!s_queue[i]){
+        pool_cleanup();
+        lua_pushnumber(L, -1);
+        return 1;
+      }
+      if(0 != qvoid_init(s_queue[i])){
+        free(s_queue[i]);
+        pool_cleanup();
+        lua_pushnumber(L, -1);
+        return 1;
+      }
+      s_queue_size += 1;
+    }
   }
   lua_pushnumber(L, 0);
   return 1;
@@ -399,7 +418,7 @@ static int pool_init(lua_State *L){
 static qvoid_t* pool_at(lua_State *L, int idx){
   int i = luaL_checkint(L, idx);
   luaL_argcheck(L, (i >= 0)&&((size_t)i < s_queue_size), idx, "index out of range");
-  return &s_queue[i];
+  return s_queue[i];
 }
 
 static void* pool_ffi_to_lightud(lua_State *L, int idx){
@@ -525,13 +544,7 @@ static int pool_unlock(lua_State *L){
 
 static int pool_close(lua_State *L){
   if(s_queue){
-    int i = s_queue_size;
-    while(--i >= 0){
-      qvoid_destroy(&s_queue[i]);
-    }
-    free(s_queue);
-    s_queue = NULL;
-    s_queue_size = 0;
+    pool_cleanup();
   }
 
   lua_pushnumber(L, 0);
