@@ -96,9 +96,9 @@ function test_multiple_queue()
   assert_equal(0, zpool.put(1, zmsg:pointer()))
   assert_equal(1, zpool.size(0))
   assert_equal(1, zpool.size(1))
-  
-  assert_equal(zmsg:pointer(), zpool.get(0))
-  assert_equal(zmsg:pointer(), zpool.get(1))
+
+  assert_userdata(zpool.get(0))
+  assert_userdata(zpool.get(1))
 end
 
 end
