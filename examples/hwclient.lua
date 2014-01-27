@@ -3,62 +3,39 @@
 
 local zmq      = require "lzmq"
 local zthreads = require "lzmq.threads"
+local zpool    = require "lzmq.pool"
 
--- This thread load `lzmq.pool` library initialize 
--- and hold it in process.
-local thread, pipe = zthreads.fork(zmq.context(), [[
-  local pipe = ...
+-- Init library with one queue.
+-- You should guarantee thread safe for this call.
+-- You could call this function from any thread.
+-- Second call of this function just return true 
+-- but does not change numbers of pools.
+zpool.init(1)
 
-  local zmq      = require "lzmq"
-  local zpool    = require "lzmq.pool"
-  local zthreads = require "lzmq.threads"
+local NUM_SOCKETS = 1
+local SOCKETS_OPT = {zmq.REQ, connect = "tcp://127.0.0.1:5556"}
 
-  -- if `parent` lua state may die and destroy this context
-  -- we should use our own context (zmq.context())
-  local ctx = zthreads.get_parent_ctx()
+local pool = zpool.new(1)
+pool:init(zmq.context(), NUM_SOCKETS, SOCKETS_OPT)
 
-  -- init library with one pool
-  -- You should guarantee thread safe for this library.
-  -- You could call this function from any thread.
-  -- Second call of this function just return true 
-  -- but does not change numbers of pools.
-  zpool.init(1)
+-- Now we should just keep alive `pool` object
 
-  -- Now we need create sockets and put them
-  -- in specific pool
-  local pool = zpool.new(1)
+-- Worker thread
+local worker = string.dump(function(POOL, TID)
+  local zpool  = require "lzmq.pool"
+  local ztimer = require "lzmq.timer"
 
-  -- we create one socket
-  pool:init(ctx, 1, {zmq.REQ, connect = "tcp://127.0.0.1:5556"})
+  -- We can get this ID for example from config.
+  local pool = zpool.new(POOL)
 
-  -- tall we ready
-  pipe:send("ready")
-
-  -- keep hold lzmq.pool library
-  pipe:recv()
-  zpool.close()
-  print("POOL DONE")
-]])
-thread:start() pipe:recv()
-
-local worker = [[
-local zpool  = require "lzmq.pool"
-local ztimer = require "lzmq.timer"
-
--- We get Pool ID and Task ID
-local POOL, TID = ...
-
--- We can get this ID for example from config.
-local pool = zpool.new(POOL)
-
-for i = 1, 5 do
-  pool:acquire(function(s)
-    print(TID, s:send("hello"))
-    print(TID, s:recv())
-  end)
-  ztimer.sleep(500)
-end
-]]
+  for i = 1, 5 do
+    pool:acquire(function(s)
+      print(TID .. ' SEND: ', s:send("hello"))
+      print(TID .. ' RECV: ', s:recv())
+    end)
+    ztimer.sleep(500)
+  end
+end)
 
 -- We create independent tasks
 -- and tell them which pool to use.
@@ -66,5 +43,3 @@ local t1 = zthreads.run(nil, worker, 1, 1) t1:start()
 local t2 = zthreads.run(nil, worker, 1, 2) t2:start()
 
 t1:join() t2:join()
-
-pipe:send("finish") thread:join()
