@@ -46,6 +46,7 @@ install:
       sudo apt-get install libzmq3-dev;
       sudo luarocks install https://raw.github.com/moteus/lzmq/master/rockspecs/lzmq-scm-0.rockspec;
     fi
+  - sudo luarocks install https://raw.github.com/moteus/lua-luq/master/rockspecs/luq-scm-0.rockspec
   - sudo luarocks install lunitx
   - sudo luarocks make rockspecs/lzmq-pool-scm-0.rockspec
 

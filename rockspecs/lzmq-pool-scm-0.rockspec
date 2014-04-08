@@ -14,6 +14,7 @@ description = {
 
 dependencies = {
   "lua >= 5.1, < 5.3",
+  "luq",
   -- "lzmq > 3.1" or "lzmq-ffi > 3.1",
 }
 
@@ -22,25 +23,7 @@ build = {
 
   type = "builtin",
 
-  platforms = {
-    unix    = { modules = {
-      ["lzmq.pool.core"] = {
-        libraries = {"pthread", "rt"},
-      }
-    }},
-
-    -- mingw32  = { modules = {
-    --   ["lzmq.pool.core"] = {
-    --     libraries = {"pthread"},
-    --     defines   = {"USE_PTHREAD"},
-    --   }
-    -- }},
-  },
-
   modules = {
-    ["lzmq.pool.core" ] = {
-      sources = {'src/l52util.c','src/q.c'},
-    },
     ["lzmq.pool"      ] = "src/lua/pool.lua";
   },
 }
