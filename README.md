@@ -3,6 +3,8 @@
 This library provide ability to use same sockets from different
 Lua states / threads in same process.
 
+This library depend from [LUQ](https://github.com/moteus/lua-luq).
+
 ###Usage
 
 ```Lua
@@ -13,17 +15,13 @@ local zmq      = require "lzmq"
 local zthreads = require "lzmq.threads"
 local zpool    = require "lzmq.pool"
 
--- Init library with one queue.
--- You should guarantee thread safe for this call.
--- You could call this function from any thread.
--- Second call of this function just return true 
--- but does not change numbers of pools.
-zpool.init(1)
+-- 
+local QUEUE_NAME = "hwclient"
 
 local NUM_SOCKETS = 1
 local SOCKETS_OPT = {zmq.REQ, connect = "tcp://127.0.0.1:5556"}
 
-local pool = zpool.new(1)
+local pool = zpool.new(QUEUE_NAME)
 pool:init(zmq.context(), NUM_SOCKETS, SOCKETS_OPT)
 
 -- Now we should just keep alive `pool` object
@@ -47,8 +45,8 @@ end)
 
 -- We create independent tasks
 -- and tell them which pool to use.
-local t1 = zthreads.run(nil, worker, 1, 1) t1:start()
-local t2 = zthreads.run(nil, worker, 1, 2) t2:start()
+local t1 = zthreads.run(nil, worker, QUEUE_NAME, 1) t1:start()
+local t2 = zthreads.run(nil, worker, QUEUE_NAME, 2) t2:start()
 
 t1:join() t2:join()
 ```
